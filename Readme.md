@@ -28,9 +28,16 @@ To preview a Markdown file, run the following command:
 
 ```sh
 ./mdp <markdown_file>
+./mdp <markdown_file> --css <css_file>
 ```
 
 Replace `<markdown_file>` with the path to your Markdown file.
+
+To Preview a Markdown file with a custom CSS file:
+
+```sh
+./mdp <markdown_file> --css <css_file>
+```
 
 The tool will convert the Markdown file to HTML, save it to a temporary file, and open it in a web browser for previewing.
 
