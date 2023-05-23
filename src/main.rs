@@ -1,4 +1,10 @@
-use std::{fs, io, path::Path, process::exit};
+use std::{
+    fs, io,
+    path::Path,
+    process::{exit, Command, Stdio},
+    thread,
+    time::{Duration, Instant},
+};
 
 use serde::Serialize;
 use structopt::StructOpt;
@@ -51,7 +57,7 @@ fn run(opt: Opt) -> Result<(), Box<dyn std::error::Error>> {
 
     save_html(&temp_file_path, &html_data)?;
 
-    Ok(())
+    Ok(preview(&temp_file_path)?)
 }
 
 fn parse_content(input: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -72,5 +78,52 @@ fn parse_content(input: &str) -> Result<String, Box<dyn std::error::Error>> {
 
 fn save_html<P: AsRef<Path>>(filename: P, html_data: &str) -> io::Result<()> {
     fs::write(filename, html_data)?;
+    Ok(())
+}
+
+fn preview<P: AsRef<Path>>(filename: P) -> io::Result<()> {
+    let os: &str = std::env::consts::OS;
+
+    let prog = match os {
+        "windows" => "cmd.exe",
+        _ => return Err(io::Error::new(io::ErrorKind::Other, "OS not supported")),
+    };
+
+    let mut cmd = Command::new(prog);
+    cmd.args(&["/C", "start", "chrome"])
+        .arg(filename.as_ref())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    let mut child = cmd.spawn()?;
+    let start_time = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Failed to open file in browser",
+                    ));
+                }
+                break;
+            }
+            Ok(None) => {
+                if start_time.elapsed() > Duration::from_secs(10) {
+                    child.kill()?;
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Timed out waiting for browser to open file",
+                    ));
+                }
+                thread::sleep(Duration::from_millis(1000));
+            }
+            Err(e) => {
+                child.kill()?;
+                return Err(e);
+            }
+        }
+    }
+
     Ok(())
 }
