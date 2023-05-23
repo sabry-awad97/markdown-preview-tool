@@ -6,8 +6,11 @@ use std::{
     time::{Duration, Instant},
 };
 
+use error::MarkdownPreviewError;
 use serde::Serialize;
 use structopt::StructOpt;
+
+mod error;
 
 const DEFAULT_TEMPLATE: &str = r#"
     <!DOCTYPE html>
@@ -49,7 +52,7 @@ impl MarkdownPreviewTool {
         Self { opt }
     }
 
-    fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn run(&self) -> Result<(), MarkdownPreviewError> {
         let input = fs::read_to_string(&self.opt.file)?;
         let html_data = self.parse_content(&input)?;
 
@@ -63,7 +66,7 @@ impl MarkdownPreviewTool {
         Ok(())
     }
 
-    fn parse_content(&self, input: &str) -> Result<String, Box<dyn std::error::Error>> {
+    fn parse_content(&self, input: &str) -> Result<String, MarkdownPreviewError> {
         let parser = pulldown_cmark::Parser::new_ext(input, pulldown_cmark::Options::all());
         let mut unsafe_html = String::new();
         pulldown_cmark::html::push_html(&mut unsafe_html, parser);
@@ -81,17 +84,26 @@ impl MarkdownPreviewTool {
         Ok(rendered)
     }
 
-    fn save_html<P: AsRef<Path>>(&self, filename: P, html_data: &str) -> io::Result<()> {
+    fn save_html<P: AsRef<Path>>(
+        &self,
+        filename: P,
+        html_data: &str,
+    ) -> Result<(), MarkdownPreviewError> {
         fs::write(filename, html_data)?;
         Ok(())
     }
 
-    fn preview<P: AsRef<Path>>(&self, filename: P) -> io::Result<()> {
+    fn preview<P: AsRef<Path>>(&self, filename: P) -> Result<(), MarkdownPreviewError> {
         let os: &str = std::env::consts::OS;
 
         let prog = match os {
             "windows" => "cmd.exe",
-            _ => return Err(io::Error::new(io::ErrorKind::Other, "OS not supported")),
+            _ => {
+                return Err(MarkdownPreviewError::IoError(io::Error::new(
+                    io::ErrorKind::Other,
+                    "OS not supported",
+                )))
+            }
         };
 
         let mut cmd = Command::new(prog);
@@ -106,26 +118,26 @@ impl MarkdownPreviewTool {
             match child.try_wait() {
                 Ok(Some(status)) => {
                     if !status.success() {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
+                        return Err(MarkdownPreviewError::IoError(io::Error::new(
+                            io::ErrorKind::Other,
                             "Failed to open file in browser",
-                        ));
+                        )));
                     }
                     break;
                 }
                 Ok(None) => {
                     if start_time.elapsed() > Duration::from_secs(10) {
                         child.kill()?;
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
+                        return Err(MarkdownPreviewError::IoError(io::Error::new(
+                            io::ErrorKind::Other,
                             "Timed out waiting for browser to open file",
-                        ));
+                        )));
                     }
                     thread::sleep(Duration::from_millis(1000));
                 }
                 Err(e) => {
                     child.kill()?;
-                    return Err(e);
+                    return Err(MarkdownPreviewError::IoError(e));
                 }
             }
         }
