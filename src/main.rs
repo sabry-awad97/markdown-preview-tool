@@ -18,9 +18,10 @@ const DEFAULT_TEMPLATE: &str = r#"
     <html>
         <head>
             <meta http-equiv="content-type" content="text/html; charset=utf-8">
-            <title>
-                {{ title }}
-            </title>
+            <title>{{ title }}</title>
+            {% if css_path %}
+            <link rel="stylesheet" href="{{ css_path }}" type="text/css">
+            {% endif %}
         </head>
         <body>
             {{ body }}
@@ -32,6 +33,7 @@ const DEFAULT_TEMPLATE: &str = r#"
 struct Content {
     title: String,
     body: String,
+    css_path: Option<PathBuf>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -42,6 +44,13 @@ struct Content {
 struct Opt {
     #[structopt(help = "Markdown file to preview", parse(from_os_str))]
     markdown_file: PathBuf,
+
+    #[structopt(
+        long = "css",
+        help = "CSS file for styling the rendered HTML",
+        parse(from_os_str)
+    )]
+    css_file: Option<PathBuf>,
 }
 
 struct MarkdownPreviewTool {
@@ -53,7 +62,7 @@ impl MarkdownPreviewTool {
         Self { opt }
     }
 
-    fn run(&self) -> Result<(), MarkdownPreviewError> {
+    fn run(&mut self) -> Result<(), MarkdownPreviewError> {
         let input = fs::read_to_string(&self.opt.markdown_file)?;
         let html_data = self.parse_content(&input)?;
 
@@ -80,7 +89,11 @@ impl MarkdownPreviewTool {
 
         let rendered = tera::Tera::one_off(
             DEFAULT_TEMPLATE,
-            &tera::Context::from_serialize(Content { title, body })?,
+            &tera::Context::from_serialize(Content {
+                title,
+                body,
+                css_path: self.opt.css_file.clone(),
+            })?,
             false,
         )?;
 
@@ -94,7 +107,12 @@ impl MarkdownPreviewTool {
         filename: P,
         html_data: &str,
     ) -> Result<(), MarkdownPreviewError> {
-        fs::write(filename, html_data)?;
+        fs::write(&filename, html_data)?;
+        if let Some(source) = self.opt.css_file.as_deref() {
+            let html_dir = filename.as_ref().parent().unwrap();
+            let destination = html_dir.join(source);
+            fs::copy(source, destination)?;
+        }
         Ok(())
     }
 
@@ -154,7 +172,7 @@ impl MarkdownPreviewTool {
 fn main() {
     env_logger::init();
     let opt = Opt::from_args();
-    let tool = MarkdownPreviewTool::new(opt);
+    let mut tool = MarkdownPreviewTool::new(opt);
     if let Err(err) = tool.run() {
         error!("Error: {}", err);
         exit(1);
