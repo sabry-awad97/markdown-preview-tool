@@ -1,4 +1,4 @@
-use std::{fs, process::exit};
+use std::{fs, io, path::Path, process::exit};
 
 use serde::Serialize;
 use structopt::StructOpt;
@@ -48,7 +48,9 @@ fn run(opt: Opt) -> Result<(), Box<dyn std::error::Error>> {
 
     let temp_dir = tempfile::Builder::new().prefix("mdp").tempdir()?;
     let temp_file_path = temp_dir.path().join("temp.html");
-    
+
+    save_html(&temp_file_path, &html_data)?;
+
     Ok(())
 }
 
@@ -66,4 +68,9 @@ fn parse_content(input: &str) -> Result<String, Box<dyn std::error::Error>> {
         false,
     )?;
     Ok(rendered)
+}
+
+fn save_html<P: AsRef<Path>>(filename: P, html_data: &str) -> io::Result<()> {
+    fs::write(filename, html_data)?;
+    Ok(())
 }
