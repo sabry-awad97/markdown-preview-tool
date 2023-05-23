@@ -1,3 +1,5 @@
+use std::process::exit;
+
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -12,5 +14,12 @@ struct Opt {
 
 fn main() {
     let opt = Opt::from_args();
-    
+    if let Err(err) = run(opt) {
+        eprintln!("Error: {}", err);
+        exit(1);
+    }
+}
+
+fn run(opt: Opt) -> Result<(), Box<dyn std::error::Error>> {
+    Ok(())
 }
