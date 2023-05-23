@@ -1,6 +1,28 @@
-use std::process::exit;
+use std::{fs, process::exit};
 
+use serde::Serialize;
 use structopt::StructOpt;
+
+const DEFAULT_TEMPLATE: &str = r#"
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <meta http-equiv="content-type" content="text/html; charset=utf-8">
+            <title>
+                {{ title }}
+            </title>
+        </head>
+        <body>
+            {{ body }}
+        </body>
+    </html>
+"#;
+
+#[derive(Debug, Serialize)]
+struct Content {
+    title: String,
+    body: String,
+}
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -21,5 +43,23 @@ fn main() {
 }
 
 fn run(opt: Opt) -> Result<(), Box<dyn std::error::Error>> {
+    let input = fs::read_to_string(&opt.file)?;
+    let html_data = parse_content(&input)?;
     Ok(())
+}
+
+fn parse_content(input: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let mut unsafe_html = String::new();
+    pulldown_cmark::html::push_html(&mut unsafe_html, pulldown_cmark::Parser::new(input));
+    let sanitized_html = ammonia::Builder::new().clean(&unsafe_html).to_string();
+
+    let title = "Markdown Preview Tool".to_owned();
+    let body = sanitized_html;
+
+    let rendered = tera::Tera::one_off(
+        DEFAULT_TEMPLATE,
+        &tera::Context::from_serialize(Content { title, body })?,
+        false,
+    )?;
+    Ok(rendered)
 }
