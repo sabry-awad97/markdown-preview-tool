@@ -45,6 +45,10 @@ fn main() {
 fn run(opt: Opt) -> Result<(), Box<dyn std::error::Error>> {
     let input = fs::read_to_string(&opt.file)?;
     let html_data = parse_content(&input)?;
+
+    let temp_dir = tempfile::Builder::new().prefix("mdp").tempdir()?;
+    let temp_file_path = temp_dir.path().join("temp.html");
+    
     Ok(())
 }
 
