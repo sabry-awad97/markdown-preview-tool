@@ -1,0 +1,14 @@
+[package]
+name = "mdp"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ammonia = "3.3.0"
+pulldown-cmark = "0.9.3"
+serde = { version = "1.0.163", features = ["derive"] }
+structopt = "0.3.26"
+tempfile = "3.5.0"
+tera = "1.18.1"
