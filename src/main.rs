@@ -8,6 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use log::{error, info};
 use structopt::StructOpt;
 
 mod error;
@@ -59,6 +60,8 @@ impl MarkdownPreviewTool {
         let temp_dir = tempfile::Builder::new().prefix("mdp").tempdir()?;
         let temp_file_path = temp_dir.path().join("temp.html");
 
+        info!("Temp dir at {}", temp_dir.path().canonicalize()?.display());
+
         self.save_html(&temp_file_path, &html_data)?;
 
         self.preview(&temp_file_path)?;
@@ -80,6 +83,8 @@ impl MarkdownPreviewTool {
             &tera::Context::from_serialize(Content { title, body })?,
             false,
         )?;
+
+        info!("Markdown parsed successfully");
 
         Ok(rendered)
     }
@@ -147,10 +152,11 @@ impl MarkdownPreviewTool {
 }
 
 fn main() {
+    env_logger::init();
     let opt = Opt::from_args();
     let tool = MarkdownPreviewTool::new(opt);
     if let Err(err) = tool.run() {
-        eprintln!("Error: {}", err);
+        error!("Error: {}", err);
         exit(1);
     }
 }
