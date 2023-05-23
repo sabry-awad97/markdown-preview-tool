@@ -61,8 +61,9 @@ fn run(opt: Opt) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn parse_content(input: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let parser = pulldown_cmark::Parser::new_ext(input, pulldown_cmark::Options::all());
     let mut unsafe_html = String::new();
-    pulldown_cmark::html::push_html(&mut unsafe_html, pulldown_cmark::Parser::new(input));
+    pulldown_cmark::html::push_html(&mut unsafe_html, parser);
     let sanitized_html = ammonia::Builder::new().clean(&unsafe_html).to_string();
 
     let title = "Markdown Preview Tool".to_owned();
