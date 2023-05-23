@@ -40,91 +40,105 @@ struct Opt {
     file: String,
 }
 
+struct MarkdownPreviewTool {
+    opt: Opt,
+}
+
+impl MarkdownPreviewTool {
+    fn new(opt: Opt) -> Self {
+        Self { opt }
+    }
+
+    fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let input = fs::read_to_string(&self.opt.file)?;
+        let html_data = self.parse_content(&input)?;
+
+        let temp_dir = tempfile::Builder::new().prefix("mdp").tempdir()?;
+        let temp_file_path = temp_dir.path().join("temp.html");
+
+        self.save_html(&temp_file_path, &html_data)?;
+
+        self.preview(&temp_file_path)?;
+
+        Ok(())
+    }
+
+    fn parse_content(&self, input: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let parser = pulldown_cmark::Parser::new_ext(input, pulldown_cmark::Options::all());
+        let mut unsafe_html = String::new();
+        pulldown_cmark::html::push_html(&mut unsafe_html, parser);
+        let sanitized_html = ammonia::Builder::new().clean(&unsafe_html).to_string();
+
+        let title = "Markdown Preview Tool".to_owned();
+        let body = sanitized_html;
+
+        let rendered = tera::Tera::one_off(
+            DEFAULT_TEMPLATE,
+            &tera::Context::from_serialize(Content { title, body })?,
+            false,
+        )?;
+
+        Ok(rendered)
+    }
+
+    fn save_html<P: AsRef<Path>>(&self, filename: P, html_data: &str) -> io::Result<()> {
+        fs::write(filename, html_data)?;
+        Ok(())
+    }
+
+    fn preview<P: AsRef<Path>>(&self, filename: P) -> io::Result<()> {
+        let os: &str = std::env::consts::OS;
+
+        let prog = match os {
+            "windows" => "cmd.exe",
+            _ => return Err(io::Error::new(io::ErrorKind::Other, "OS not supported")),
+        };
+
+        let mut cmd = Command::new(prog);
+        cmd.args(&["/C", "start", "chrome"])
+            .arg(filename.as_ref())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+
+        let mut child = cmd.spawn()?;
+        let start_time = Instant::now();
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "Failed to open file in browser",
+                        ));
+                    }
+                    break;
+                }
+                Ok(None) => {
+                    if start_time.elapsed() > Duration::from_secs(10) {
+                        child.kill()?;
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "Timed out waiting for browser to open file",
+                        ));
+                    }
+                    thread::sleep(Duration::from_millis(1000));
+                }
+                Err(e) => {
+                    child.kill()?;
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 fn main() {
     let opt = Opt::from_args();
-    if let Err(err) = run(opt) {
+    let tool = MarkdownPreviewTool::new(opt);
+    if let Err(err) = tool.run() {
         eprintln!("Error: {}", err);
         exit(1);
     }
-}
-
-fn run(opt: Opt) -> Result<(), Box<dyn std::error::Error>> {
-    let input = fs::read_to_string(&opt.file)?;
-    let html_data = parse_content(&input)?;
-
-    let temp_dir = tempfile::Builder::new().prefix("mdp").tempdir()?;
-    let temp_file_path = temp_dir.path().join("temp.html");
-
-    save_html(&temp_file_path, &html_data)?;
-
-    Ok(preview(&temp_file_path)?)
-}
-
-fn parse_content(input: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let parser = pulldown_cmark::Parser::new_ext(input, pulldown_cmark::Options::all());
-    let mut unsafe_html = String::new();
-    pulldown_cmark::html::push_html(&mut unsafe_html, parser);
-    let sanitized_html = ammonia::Builder::new().clean(&unsafe_html).to_string();
-
-    let title = "Markdown Preview Tool".to_owned();
-    let body = sanitized_html;
-
-    let rendered = tera::Tera::one_off(
-        DEFAULT_TEMPLATE,
-        &tera::Context::from_serialize(Content { title, body })?,
-        false,
-    )?;
-    Ok(rendered)
-}
-
-fn save_html<P: AsRef<Path>>(filename: P, html_data: &str) -> io::Result<()> {
-    fs::write(filename, html_data)?;
-    Ok(())
-}
-
-fn preview<P: AsRef<Path>>(filename: P) -> io::Result<()> {
-    let os: &str = std::env::consts::OS;
-
-    let prog = match os {
-        "windows" => "cmd.exe",
-        _ => return Err(io::Error::new(io::ErrorKind::Other, "OS not supported")),
-    };
-
-    let mut cmd = Command::new(prog);
-    cmd.args(&["/C", "start", "chrome"])
-        .arg(filename.as_ref())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-
-    let mut child = cmd.spawn()?;
-    let start_time = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                if !status.success() {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Failed to open file in browser",
-                    ));
-                }
-                break;
-            }
-            Ok(None) => {
-                if start_time.elapsed() > Duration::from_secs(10) {
-                    child.kill()?;
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Timed out waiting for browser to open file",
-                    ));
-                }
-                thread::sleep(Duration::from_millis(1000));
-            }
-            Err(e) => {
-                child.kill()?;
-                return Err(e);
-            }
-        }
-    }
-
-    Ok(())
 }
