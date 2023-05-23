@@ -107,6 +107,8 @@ impl MarkdownPreviewTool {
         filename: P,
         html_data: &str,
     ) -> Result<(), MarkdownPreviewError> {
+        info!("Saving HTML to file: {}", filename.as_ref().display());
+
         fs::write(&filename, html_data)?;
         if let Some(source) = self.opt.css_file.as_deref() {
             let html_dir = filename.as_ref().parent().unwrap();
