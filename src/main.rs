@@ -1,13 +1,13 @@
+use error::MarkdownPreviewError;
+use serde::Serialize;
 use std::{
     fs, io,
-    path::Path,
+    path::{Path, PathBuf},
     process::{exit, Command, Stdio},
     thread,
     time::{Duration, Instant},
 };
 
-use error::MarkdownPreviewError;
-use serde::Serialize;
 use structopt::StructOpt;
 
 mod error;
@@ -39,8 +39,8 @@ struct Content {
     about = "Converts Markdown to HTML and opens it in a web browser for preview."
 )]
 struct Opt {
-    #[structopt(short, long, help = "Markdown file to preview")]
-    file: String,
+    #[structopt(help = "Markdown file to preview", parse(from_os_str))]
+    markdown_file: PathBuf,
 }
 
 struct MarkdownPreviewTool {
@@ -53,7 +53,7 @@ impl MarkdownPreviewTool {
     }
 
     fn run(&self) -> Result<(), MarkdownPreviewError> {
-        let input = fs::read_to_string(&self.opt.file)?;
+        let input = fs::read_to_string(&self.opt.markdown_file)?;
         let html_data = self.parse_content(&input)?;
 
         let temp_dir = tempfile::Builder::new().prefix("mdp").tempdir()?;
